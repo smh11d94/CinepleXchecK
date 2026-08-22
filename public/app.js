@@ -47,6 +47,9 @@ const el = {
   rulesSaved: $('#rulesSaved'),
   targets: $('#targets'),
   emptyState: $('#emptyState'),
+  ruleBar: $('#ruleBar'),
+  ruleText: $('#ruleText'),
+  ruleEdit: $('#ruleEdit'),
   goToSettings: $('#goToSettings'),
   logWrap: $('#logWrap'),
   log: $('#log'),
@@ -125,6 +128,7 @@ for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => showTab(tab.dataset.tab));
 }
 el.goToSettings.addEventListener('click', () => showTab('settings'));
+el.ruleEdit.addEventListener('click', () => showTab('settings'));
 
 try {
   showTab(localStorage.getItem('seatwatcher.tab') === 'settings' ? 'settings' : 'watching');
@@ -252,6 +256,7 @@ function render() {
   }
 
   paintStats(targets);
+  paintRuleBar(targets.length);
   paintKnownTheatres(byLocation);
   if (state.settings && !editingRules) paintRules(state.settings);
   paintRowChips();
@@ -318,6 +323,13 @@ function wireKnownRow(row, locationId) {
       onAdded: () => { input.value = ''; } });
     if (clean) showTab('watching');
   });
+}
+
+function paintRuleBar(count) {
+  const want = state.settings?.want;
+  el.ruleBar.hidden = !want || count === 0;
+  if (el.ruleBar.hidden) return;
+  el.ruleText.textContent = describeRule(want);
 }
 
 function paintStats(targets) {
@@ -451,8 +463,12 @@ function paintCard(card, t) {
   } else if (result?.isSoldOut) {
     status.textContent = 'sold out';
     status.classList.add('stat-warn');
+  } else if (t.want && Object.keys(t.want).length) {
+    // Only worth saying when this showtime departs from the global rule —
+    // otherwise it is the same sentence repeated on every card.
+    status.textContent = `own rule: ${describeRule(t.effectiveWant)}`;
   } else {
-    status.textContent = describeRule(t.effectiveWant);
+    status.textContent = '';
   }
 
   card.querySelector('.js-checked').textContent = t.lastChecked ? clockOf(t.lastChecked) : '';
