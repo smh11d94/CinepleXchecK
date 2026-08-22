@@ -128,6 +128,7 @@ export class Watcher extends EventEmitter {
       theatre: null,
       showDate: null,
       startTime: null,
+      startTimeUtc: null,
       rows: [],
       failures: 0,
       skipUntil: 0,
@@ -154,6 +155,18 @@ export class Watcher extends EventEmitter {
       throw new Error(`Could not reach Cineplex: ${err.message}`);
     } finally {
       this.#adding.delete(key);
+    }
+
+    if (hasStarted(target)) {
+      const err = new Error(
+        `That showtime already started (${formatLocal(target.startTime)}). Nothing left to watch.`
+      );
+      // Distinguishable from a genuine failure: on restore these are pruned
+      // rather than reported as errors on every startup.
+      err.code = 'expired';
+      err.startTime = target.startTime;
+      err.movie = target.movie;
+      throw err;
     }
 
     this.#targets.set(key, target);
@@ -185,6 +198,9 @@ export class Watcher extends EventEmitter {
           locationId: items[i].locationId ?? null,
           showtimeId: items[i].showtimeId ?? items[i].url ?? null,
           error: outcome.error.message,
+          code: outcome.error.code ?? null,
+          movie: outcome.error.movie ?? null,
+          startTime: outcome.error.startTime ?? null,
         });
       }
     });
@@ -254,6 +270,8 @@ export class Watcher extends EventEmitter {
       theatre: target.theatre,
       showDate: target.showDate,
       startTime: target.startTime,
+      startTimeUtc: target.startTimeUtc,
+      expired: hasStarted(target),
       rows: target.rows,
       seatCount: target.seatIndex ? target.seatIndex.size : 0,
       want: target.want,
@@ -293,6 +311,35 @@ export class Watcher extends EventEmitter {
         paused: t.paused,
       })),
     };
+  }
+
+  /**
+   * Retire a showtime whose screening has started.
+   *
+   * Returns true if the target is finished with, so callers can skip it.
+   */
+  async #retireIfStarted(target) {
+    if (target.retired) return true;
+    if (!hasStarted(target)) return false;
+
+    target.retired = true;
+    const when = formatLocal(target.startTime);
+    const name = target.movie ?? `Showtime ${target.showtimeId}`;
+    this.#log('info', `${name} (${when}) has started - no longer checking it`);
+    this.emit('expired', {
+      target: this.describeTarget(target),
+      at: new Date().toISOString(),
+    });
+
+    if (this.notify?.macos !== false) {
+      await macNotify({
+        title: 'Showtime has started',
+        subtitle: name,
+        message: `${when} - no longer being checked`,
+        sound: this.notify?.sound ?? 'Glass',
+      });
+    }
+    return true;
   }
 
   /**
@@ -382,7 +429,11 @@ export class Watcher extends EventEmitter {
     let anyLive = false;
 
     for (const target of this.#targets.values()) {
-      if (target.retired || target.paused) continue;
+      if (target.retired) continue;
+      // Checked every cycle so a showtime stops being polled the moment it
+      // starts, rather than whenever Cineplex gets round to admitting it.
+      if (await this.#retireIfStarted(target)) continue;
+      if (target.paused) continue;
       anyLive = true;
       if (Date.now() < target.skipUntil) continue; // backing off after a failure
       due.push(target);
@@ -435,10 +486,39 @@ export class Watcher extends EventEmitter {
   }
 }
 
+/**
+ * Has the screening already begun?
+ *
+ * Judged on the UTC instant Cineplex publishes, so it is correct regardless of
+ * the machine's timezone. Cineplex's own `isPostShowtime` flag cannot be used
+ * for this - it was still false for showtimes three minutes from starting.
+ */
+export function hasStarted(target, now = Date.now()) {
+  if (!target.startTimeUtc) return false;
+  const t = Date.parse(target.startTimeUtc);
+  return Number.isFinite(t) && now >= t;
+}
+
 function clampConcurrency(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 1) return DEFAULT_CONCURRENCY;
   return Math.min(MAX_CONCURRENCY, Math.floor(n));
+}
+
+/**
+ * Render "2026-08-22T19:00:00" as "Aug 22, 7:00 PM".
+ *
+ * The components are formatted as written rather than parsed as an instant, so
+ * the theatre's local time is shown verbatim whatever timezone we run in.
+ */
+export function formatLocal(iso) {
+  if (!iso) return 'unknown time';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return iso;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+  return d.toLocaleString('en-CA', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+  });
 }
 
 /** Fetch the static layout + movie metadata once. Only availability is re-polled. */
@@ -455,6 +535,9 @@ export async function warmup(target) {
   // Local start time, e.g. "2026-08-22T15:00:00". showDate is date-only, so
   // this nested field is the only place the actual screening time appears.
   target.startTime = meta?.showtime?.showStartDateTime ?? null;
+  // The UTC instant is what expiry is judged on. The local string above has no
+  // zone, so comparing it would silently depend on this machine's timezone.
+  target.startTimeUtc = meta?.showtime?.showStartDateTimeUtc ?? null;
   target.rows = [...new Set([...target.seatIndex.values()].map((s) => s.row))].sort();
   return target;
 }

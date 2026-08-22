@@ -11,7 +11,7 @@ const $ = (sel) => document.querySelector(sel);
  * page from an old API. That mismatch used to surface as a confusing validation
  * error; now it says plainly that the server needs restarting.
  */
-const EXPECTED_API_VERSION = 6;
+const EXPECTED_API_VERSION = 7;
 
 const el = {
   brandSub: $('#brandSub'),
@@ -182,14 +182,16 @@ function addLog(level, message, at) {
  * date alone if Cineplex ever omits it.
  */
 function formatWhen(t) {
-  if (t.startTime) {
-    const d = new Date(t.startTime);
-    if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleString([], {
-        weekday: 'short', month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit',
-      });
-    }
+  const m = t.startTime && String(t.startTime).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (m) {
+    // Built and rendered in UTC so the components print exactly as Cineplex
+    // states them - the theatre's local (Pacific) clock - rather than being
+    // shifted into whatever timezone this browser happens to be in.
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+    return d.toLocaleString([], {
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+    });
   }
   return t.showDate ? t.showDate.slice(0, 10) : `#${t.showtimeId}`;
 }
@@ -478,7 +480,8 @@ function paintCard(card, t) {
     status.textContent = t.error;
     status.classList.add('stat-bad');
   } else if (t.retired) {
-    status.textContent = 'showtime has passed';
+    status.textContent = 'started - no longer checked';
+    status.classList.add('stat-warn');
   } else if (t.paused) {
     status.textContent = 'paused';
   } else if (result?.isSoldOut) {
@@ -660,6 +663,13 @@ function connect() {
     toast('hit', `Seats available - ${name}`, seats);
     addLog('hit', `${name} - ${seats}`);
     browserNotify(name, seats, target.url);
+  });
+
+  source.addEventListener('expired', (e) => {
+    const { target } = JSON.parse(e.data);
+    const name = target.movie || `Showtime ${target.showtimeId}`;
+    toast('error', 'Showtime started', `${name} - no longer being checked`);
+    addLog('warn', `${name} has started - stopped checking`);
   });
 
   source.addEventListener('gone', (e) => {

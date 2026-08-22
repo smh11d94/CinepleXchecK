@@ -248,6 +248,25 @@ baked in at build time, so the apps work whether you leave them in place or move
 to the Dock. To change the port, edit `PORT=8787` at the top of
 `Start Seat Watcher.app/Contents/MacOS/launch` (and the matching line in the Stop app).
 
+## Showtimes that have started
+
+A showtime stops being checked the moment it starts, and you get a macOS
+notification plus a toast saying so. Adding one that has already started is
+refused with the start time rather than silently watched.
+
+Expiry is judged on `showStartDateTimeUtc` — an unambiguous instant — so it is
+correct regardless of what timezone the machine is in. Cineplex's own
+`isPostShowtime` flag is not used for this: it was still `false` for showtimes
+three minutes from starting.
+
+Times are always displayed as the theatre's own local (Pacific) clock. The
+components are rendered as written rather than converted, so a 7:00 PM screening
+reads as 7:00 PM whatever timezone your machine is set to.
+
+On startup, showtimes that have passed since you last ran it are reported and
+dropped from `config.json`, so the list stays current instead of accumulating
+dead entries that fail on every launch.
+
 ## Notes
 
 - The API key in [`src/api.js`](src/api.js) is the public client key Cineplex ships in its

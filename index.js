@@ -76,11 +76,40 @@ async function buildWatcher(store) {
   const { failed } = await watcher.addTargets(
     cfg.targets.map((t) => ({ url: t.url, want: t.want, check: false }))
   );
-  for (const f of failed) {
-    console.error(color.red(`  ! could not load showtime ${f.showtimeId}: ${f.error}`));
-  }
+  await reportRestoreFailures(failed, { persist: () => store.save(watcher.toConfig()) });
   restorePaused(watcher, cfg);
   return { watcher, cfg };
+}
+
+/**
+ * Report restore failures, separating showtimes that have simply started from
+ * genuine problems.
+ *
+ * Started showtimes are normal housekeeping: they are dropped from the watch
+ * list and, since the config is rewritten from the live list, pruned from disk
+ * too — otherwise they would fail on every startup forever.
+ */
+async function reportRestoreFailures(failed, { persist } = {}) {
+  const expired = failed.filter((f) => f.code === 'expired');
+  const broken = failed.filter((f) => f.code !== 'expired');
+
+  for (const f of broken) {
+    console.error(color.red(`  ! could not load showtime ${f.showtimeId}: ${f.error}`));
+  }
+
+  if (expired.length) {
+    console.log(
+      color.yellow(
+        `  ${expired.length} showtime${expired.length === 1 ? '' : 's'} had already started ` +
+          `and ${expired.length === 1 ? 'was' : 'were'} removed:`
+      )
+    );
+    for (const f of expired) {
+      console.log(color.dim(`    ${f.movie ?? f.showtimeId} - ${f.startTime ?? ''}`));
+    }
+    if (persist) await persist();
+  }
+  return { expired, broken };
 }
 
 /** Re-apply saved pause flags after a bulk restore. */
@@ -150,9 +179,7 @@ async function main() {
       const { failed } = await watcher.addTargets(
         cfg.targets.map((t) => ({ url: t.url, want: t.want, check: false }))
       );
-      for (const f of failed) {
-        console.error(color.red(`  ! could not restore showtime ${f.showtimeId}: ${f.error}`));
-      }
+      await reportRestoreFailures(failed, { persist });
       restorePaused(watcher, cfg);
       watcher.start();
     });

@@ -13,7 +13,7 @@ import { parseTicketUrl } from './api.js';
  * src/ while running — a server left up across an edit will happily serve the
  * new page to the browser while still running the old API.
  */
-export const API_VERSION = 6;
+export const API_VERSION = 7;
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -145,6 +145,7 @@ export function createControlServer({ watcher, onChange }) {
   watcher.on('target', (t) => broadcast('target', t));
   watcher.on('alert', (a) => broadcast('alert', a));
   watcher.on('gone', (g) => broadcast('gone', g));
+  watcher.on('expired', (x) => broadcast('expired', x));
   watcher.on('cycle', (c) => broadcast('cycle', c));
   watcher.on('scheduled', (x) => broadcast('scheduled', x));
   watcher.on('log', (l) => broadcast('log', l));
