@@ -500,16 +500,44 @@ function paintCard(card, t) {
   const bar = card.querySelector('.js-rowbar');
   bar.replaceChildren();
   const wanted = new Set((t.effectiveWant?.rows ?? []).map((r) => String(r).toUpperCase()));
+  const allowSpecial = Boolean(t.effectiveWant?.allowSpecialSeats);
   for (const row of result?.freeByRow ?? []) {
     const tag = document.createElement('span');
     tag.className = 'rowtag';
     if (wanted.has(String(row.row).toUpperCase())) tag.dataset.wanted = 'true';
+
     const letter = document.createElement('b');
     letter.textContent = row.row;
-    const count = document.createElement('i');
-    count.textContent = ` ×${row.labels.length}`;
-    tag.append(letter, count);
-    tag.title = `Row ${row.row}: ${row.labels.join(', ')}`;
+    tag.append(letter);
+
+    // Wheelchair spaces and their companion seats are separate seats in the
+    // data (and on Cineplex's own map), so a row like E reads as inflated when
+    // they are lumped in with normal seats. Split them out.
+    const standard = row.labels.length - row.special;
+    if (standard > 0 || row.special === 0) {
+      const count = document.createElement('i');
+      count.textContent = ` ×${standard}`;
+      tag.append(count);
+    }
+    if (row.special > 0) {
+      const acc = document.createElement('span');
+      acc.className = 'rowtag-acc';
+      acc.dataset.inactive = String(!allowSpecial);
+      acc.append(icon('i-access'));
+      const n = document.createElement('i');
+      n.textContent = row.special;
+      acc.append(n);
+      tag.append(acc);
+    }
+
+    const parts = [`Row ${row.row}: ${row.labels.join(', ')}`];
+    if (row.special > 0) {
+      parts.push(
+        `${row.special} of these are wheelchair/companion seats` +
+        (allowSpecial ? '' : ' and are excluded by your rule')
+      );
+    }
+    tag.title = parts.join('\n');
     bar.append(tag);
   }
 }

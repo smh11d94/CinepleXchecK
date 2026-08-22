@@ -356,6 +356,14 @@ h4 { font-size: 14.5px; line-height: 1.35; }
 }
 .rowtag[data-wanted="true"] { border-color: var(--accent); color: var(--accent); }
 .rowtag i { font-style: normal; color: var(--text-faint); }
+/* Wheelchair + companion seats, kept visually separate from normal seats. */
+.rowtag-acc {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-left: 6px; padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+.rowtag-acc .ico { width: 11px; height: 11px; stroke-width: 2.2; }
+.rowtag-acc[data-inactive="true"] { opacity: .5; }
 
 /* ═══ Match banner ════════════════════════════════════════════════ */
 .match {
