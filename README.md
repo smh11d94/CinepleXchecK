@@ -8,14 +8,28 @@ them without you refreshing the page.
 
 ## Quick start
 
+**Double-click `Start Seat Watcher.app`.**
+
+It starts the watcher in the background, waits until it's actually answering, and
+opens the control panel in your browser. Nothing to type, no terminal window.
+Double-clicking again while it's running just reopens the page — it won't start a
+second copy.
+
+**Double-click `Stop Seat Watcher.app`** when you're done. Until you do, the watcher
+keeps checking in the background even with the browser closed, which is usually what
+you want.
+
+Drag either app to the Dock for one-click access — they find the project by absolute
+path, so they keep working from anywhere. Output goes to `~/Library/Logs/SeatWatcher.log`.
+
+### Or from a terminal
+
 ```bash
 node index.js --serve
 ```
 
-Then open **http://127.0.0.1:8787** and add showtimes in the browser.
-
-No dependencies, no install step. Requires Node 18+ (built-in `fetch`).
-Press `Ctrl+C` to stop.
+Then open **http://127.0.0.1:8787**. No dependencies, no install step. Requires
+Node 18+ (built-in `fetch`). Press `Ctrl+C` to stop.
 
 ## The control panel
 
@@ -212,6 +226,27 @@ src/match.js     adjacency matching
 src/api.js       Cineplex API client
 src/store.js     reads and writes config.json
 ```
+
+## The launcher apps
+
+`Start Seat Watcher.app` and `Stop Seat Watcher.app` are plain bundles — an
+`Info.plist` plus a shell script, no compiled code. Because they're built locally
+they carry no quarantine flag, so macOS opens them without a Gatekeeper prompt.
+
+Two details they handle that trip up most double-click launchers:
+
+- **`PATH`.** Apps launched from Finder don't inherit your shell's `PATH`, so a
+  Homebrew/nvm/fnm `node` is invisible to them. The launcher checks the usual
+  locations, then falls back to asking your login shell (`$SHELL -lc 'command -v
+  node'`), which does read your profile. If it still can't find Node it says so in a
+  dialog rather than failing silently.
+- **Readiness.** It polls `/api/state` until the server actually answers before
+  opening the browser, instead of opening a dead tab and hoping.
+
+Both scripts prefer the project folder they're sitting in and fall back to the path
+baked in at build time, so the apps work whether you leave them in place or move them
+to the Dock. To change the port, edit `PORT=8787` at the top of
+`Start Seat Watcher.app/Contents/MacOS/launch` (and the matching line in the Stop app).
 
 ## Notes
 

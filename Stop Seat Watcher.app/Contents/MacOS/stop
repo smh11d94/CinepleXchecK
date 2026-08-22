@@ -1,0 +1,41 @@
+#!/bin/bash
+# Stops the background seat-watcher server started by "Start Seat Watcher".
+
+PORT=8787
+STATE_DIR="$HOME/Library/Application Support/Seat Watcher"
+PIDFILE="$STATE_DIR/server.pid"
+URL="http://127.0.0.1:$PORT"
+
+note() {
+  /usr/bin/osascript -e "display notification \"$1\" with title \"Seat Watcher\"" >/dev/null 2>&1
+}
+
+running() { /usr/bin/curl -sf -m 2 -o /dev/null "$URL/api/state"; }
+
+if ! running; then
+  note "It was not running."
+  exit 0
+fi
+
+# Prefer the recorded PID; a stale file falls back to matching the command.
+killed=0
+if [ -f "$PIDFILE" ]; then
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null && killed=1
+  fi
+fi
+[ "$killed" -eq 1 ] || pkill -f "index.js --serve --port $PORT" 2>/dev/null
+
+# Confirm it actually went away before claiming success.
+for _ in $(seq 1 20); do
+  running || break
+  sleep 0.25
+done
+rm -f "$PIDFILE"
+
+if running; then
+  /usr/bin/osascript -e 'display alert "Seat Watcher" message "Could not stop the server. It may have been started from a terminal." as critical' >/dev/null 2>&1
+  exit 1
+fi
+note "Stopped. Seats are no longer being checked."

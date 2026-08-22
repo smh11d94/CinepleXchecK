@@ -1,0 +1,75 @@
+#!/bin/bash
+# Double-clickable launcher for the Cineplex seat watcher.
+#
+# Starts the local control server if it isn't already up, waits until it
+# actually answers, then opens the browser. Safe to double-click repeatedly:
+# a second launch just reopens the page.
+
+PORT=8787                                   # edit here to change the port
+LOG="$HOME/Library/Logs/SeatWatcher.log"
+STATE_DIR="$HOME/Library/Application Support/Seat Watcher"
+PIDFILE="$STATE_DIR/server.pid"
+URL="http://127.0.0.1:$PORT"
+
+die() {
+  # Finder gives us no stdout, so failures have to be a real dialog.
+  /usr/bin/osascript -e "display alert \"Seat Watcher\" message \"$1\" as critical" >/dev/null 2>&1
+  exit 1
+}
+
+# ── Locate the project ────────────────────────────────────────────────
+# Prefer the folder the app is sitting in, so moving the whole project
+# keeps working. The path baked in at build time is the fallback for when
+# the app itself has been moved (to the Dock, /Applications, ...).
+here="$(cd "$(dirname "$0")" && pwd)"
+beside="$(cd "$here/../../.." && pwd)"
+PROJECT_DIR="/Users/mohammad/projects/CinepleX-Check"
+[ -f "$beside/index.js" ] && PROJECT_DIR="$beside"
+
+[ -f "$PROJECT_DIR/index.js" ] || die "Could not find index.js.\n\nExpected it in:\n$PROJECT_DIR\n\nKeep this app inside the project folder, or move the project back."
+
+# ── Locate node ───────────────────────────────────────────────────────
+# Apps launched from Finder do NOT inherit your shell PATH, so nvm/fnm/
+# Homebrew node is invisible unless we go looking for it.
+find_node() {
+  local c
+  for c in /usr/local/bin/node /opt/homebrew/bin/node /usr/bin/node; do
+    [ -x "$c" ] && { printf '%s' "$c"; return 0; }
+  done
+  # Ask the login shell, which does source the user's profile.
+  c="$("${SHELL:-/bin/zsh}" -lc 'command -v node' 2>/dev/null | tail -1)"
+  [ -n "$c" ] && [ -x "$c" ] && { printf '%s' "$c"; return 0; }
+  return 1
+}
+NODE="$(find_node)" || die "Node.js could not be found.\n\nInstall it from nodejs.org, then double-click this app again."
+
+# ── Start it if it isn't already serving ──────────────────────────────
+mkdir -p "$STATE_DIR" "$(dirname "$LOG")"
+
+already_up() { /usr/bin/curl -sf -m 2 -o /dev/null "$URL/api/state"; }
+
+if ! already_up; then
+  {
+    echo ""
+    echo "=== $(date) : starting on port $PORT ==="
+  } >> "$LOG"
+
+  cd "$PROJECT_DIR" || die "Could not enter $PROJECT_DIR"
+  nohup "$NODE" "$PROJECT_DIR/index.js" --serve --port "$PORT" >> "$LOG" 2>&1 &
+  echo $! > "$PIDFILE"
+
+  # Wait for it to actually answer rather than opening a dead tab.
+  ready=0
+  for _ in $(seq 1 60); do
+    if already_up; then ready=1; break; fi
+    sleep 0.25
+  done
+
+  if [ "$ready" -ne 1 ]; then
+    die "The server did not start within 15 seconds.\n\nCheck the log:\n$LOG"
+  fi
+
+  /usr/bin/osascript -e 'display notification "Watching for seats. Leave it running." with title "Seat Watcher started" sound name "Glass"' >/dev/null 2>&1
+fi
+
+open "$URL"
