@@ -56,8 +56,17 @@ const el = {
   logCount: $('#logCount'),
   clearLog: $('#clearLog'),
   toasts: $('#toasts'),
+  matchDialog: $('#matchDialog'),
+  hitSub: $('#hitSub'),
+  hitQueue: $('#hitQueue'),
+  hitMovie: $('#hitMovie'),
+  hitWhere: $('#hitWhere'),
+  hitRuns: $('#hitRuns'),
+  hitBook: $('#hitBook'),
+  hitDismiss: $('#hitDismiss'),
   tpl: $('#targetTpl'),
   groupTpl: $('#groupTpl'),
+  dayTpl: $('#dayTpl'),
   knownTpl: $('#knownTpl'),
   knownCard: $('#knownCard'),
   knownList: $('#knownList'),
@@ -207,6 +216,36 @@ function describeRule(want) {
  * Earliest screening first. Showtimes with no start time sink to the bottom
  * rather than jumping to the front, and ties fall back to the ID.
  */
+const isMatched = (t) => (t.result?.runs?.length ?? 0) > 0 && !t.paused;
+
+/** Calendar day of the screening, as the theatre reckons it. */
+function dayKeyOf(t) {
+  if (t.startTime) return String(t.startTime).slice(0, 10);
+  if (t.showDate) return String(t.showDate).slice(0, 10);
+  return 'unknown';
+}
+
+/** "Saturday, August 22" - built in UTC so the date is never shifted. */
+function formatDayTitle(day) {
+  const m = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return 'Date unknown';
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.toLocaleDateString([], {
+    weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
+  });
+}
+
+const localDayKey = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** "Today" / "Tomorrow" badge, or nothing. */
+function relativeDay(day) {
+  const now = new Date();
+  if (day === localDayKey(now)) return 'Today';
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return day === localDayKey(t) ? 'Tomorrow' : '';
+}
+
 function byStart(a, b) {
   const ta = Date.parse(a.startTimeUtc ?? '');
   const tb = Date.parse(b.startTimeUtc ?? '');
@@ -237,59 +276,99 @@ function render() {
     (a, b) => byId(a.locationId, b.locationId) || byStart(a, b)
   );
 
-  const byLocation = new Map();
+  // Day first, theatre second. Grouping this way is what lines the columns up:
+  // every day starts level in both columns, instead of each theatre stacking
+  // all of its days independently so nothing across the columns corresponds.
+  const byDay = new Map();
+  const byLocation = new Map(); // flat view, for the Settings tab
   for (const t of ordered) {
+    const day = dayKeyOf(t);
+    if (!byDay.has(day)) byDay.set(day, new Map());
+    const locs = byDay.get(day);
+    if (!locs.has(t.locationId)) locs.set(t.locationId, []);
+    locs.get(t.locationId).push(t);
+
     if (!byLocation.has(t.locationId)) byLocation.set(t.locationId, []);
     byLocation.get(t.locationId).push(t);
   }
 
-  // Rebuild in place, keyed by location and showtime, so unrelated cards
-  // don't flash on every poll.
-  const seenGroups = new Set();
-  for (const [locationId, list] of byLocation) {
-    seenGroups.add(locationId);
-
-    let group = el.targets.querySelector(`.loc-group[data-location="${CSS.escape(locationId)}"]`);
-    if (!group) {
-      group = el.groupTpl.content.firstElementChild.cloneNode(true);
-      group.dataset.location = locationId;
-      el.targets.append(group);
+  // Rebuilt in place and keyed, so unrelated cards don't flash on every poll.
+  // Nodes are re-appended in order each pass, which also moves an existing one
+  // into place when a new earlier day arrives.
+  const seenDays = new Set();
+  for (const [day, locs] of byDay) {
+    seenDays.add(day);
+    let daySec = el.targets.querySelector(`.day[data-day="${CSS.escape(day)}"]`);
+    if (!daySec) {
+      daySec = el.dayTpl.content.firstElementChild.cloneNode(true);
+      daySec.dataset.day = day;
     }
+    el.targets.append(daySec);
 
-    const hits = list.filter((t) => (t.result?.runs?.length ?? 0) > 0 && !t.paused).length;
-    group.dataset.matched = String(hits > 0);
-    group.querySelector('.loc-name').textContent =
-      list.find((t) => t.theatre)?.theatre || `Location ${locationId}`;
+    const dayTargets = [...locs.values()].flat();
+    const dayHits = dayTargets.filter(isMatched).length;
+    daySec.querySelector('.day-title').textContent = formatDayTitle(day);
+    daySec.querySelector('.day-rel').textContent = relativeDay(day);
 
-    const meta = group.querySelector('.loc-meta');
-    meta.replaceChildren(
-      document.createTextNode(`#${locationId} · ${list.length} showtime${list.length === 1 ? '' : 's'}`)
+    const dayMeta = daySec.querySelector('.day-meta');
+    dayMeta.replaceChildren(
+      document.createTextNode(`${dayTargets.length} showtime${dayTargets.length === 1 ? '' : 's'}`)
     );
-    if (hits) {
+    if (dayHits) {
       const b = document.createElement('b');
-      b.textContent = ` · ${hits} with seats`;
-      meta.append(b);
+      b.textContent = ` · ${dayHits} with seats`;
+      dayMeta.append(b);
     }
 
-    const holder = group.querySelector('.loc-cards');
-    const seenCards = new Set();
-    for (const t of list) {
-      seenCards.add(t.key);
-      let card = holder.querySelector(`[data-key="${CSS.escape(t.key)}"]`);
-      if (!card) {
-        card = el.tpl.content.firstElementChild.cloneNode(true);
-        card.dataset.key = t.key;
-        wireCard(card, t.key);
-        holder.append(card);
+    const grid = daySec.querySelector('.day-grid');
+    const seenGroups = new Set();
+    for (const [locationId, list] of locs) {
+      seenGroups.add(locationId);
+      let group = grid.querySelector(`.loc-group[data-location="${CSS.escape(locationId)}"]`);
+      if (!group) {
+        group = el.groupTpl.content.firstElementChild.cloneNode(true);
+        group.dataset.location = locationId;
       }
-      paintCard(card, t);
+      grid.append(group);
+
+      const hits = list.filter(isMatched).length;
+      group.dataset.matched = String(hits > 0);
+      group.querySelector('.loc-name').textContent =
+        list.find((t) => t.theatre)?.theatre || `Location ${locationId}`;
+
+      const meta = group.querySelector('.loc-meta');
+      meta.replaceChildren(
+        document.createTextNode(`#${locationId} · ${list.length} showtime${list.length === 1 ? '' : 's'}`)
+      );
+      if (hits) {
+        const b = document.createElement('b');
+        b.textContent = ` · ${hits} with seats`;
+        meta.append(b);
+      }
+
+      const holder = group.querySelector('.loc-cards');
+      const seenCards = new Set();
+      for (const t of list) {
+        seenCards.add(t.key);
+        let card = holder.querySelector(`[data-key="${CSS.escape(t.key)}"]`);
+        if (!card) {
+          card = el.tpl.content.firstElementChild.cloneNode(true);
+          card.dataset.key = t.key;
+          wireCard(card, t.key);
+        }
+        holder.append(card);
+        paintCard(card, t);
+      }
+      for (const card of [...holder.children]) {
+        if (!seenCards.has(card.dataset.key)) card.remove();
+      }
     }
-    for (const card of [...holder.children]) {
-      if (!seenCards.has(card.dataset.key)) card.remove();
+    for (const group of [...grid.children]) {
+      if (!seenGroups.has(group.dataset.location)) group.remove();
     }
   }
-  for (const group of [...el.targets.children]) {
-    if (!seenGroups.has(group.dataset.location)) group.remove();
+  for (const daySec of [...el.targets.children]) {
+    if (!seenDays.has(daySec.dataset.day)) daySec.remove();
   }
 
   paintStats(targets);
@@ -419,6 +498,88 @@ function wireCard(card, key) {
   });
 }
 
+/** Render matching runs into a <ul>. Shared by the card and the dialog. */
+function paintRuns(list, runs, limit = 8) {
+  list.replaceChildren();
+  for (const run of runs.slice(0, limit)) {
+    const li = document.createElement('li');
+    const row = document.createElement('span');
+    row.className = 'run-row';
+    row.textContent = `Row ${run.row}`;
+    const seats = document.createElement('span');
+    seats.className = 'run-seats';
+    seats.textContent = run.seats.join(', ');
+    li.append(row, seats);
+    if (run.types?.some((x) => x !== 'Standard')) {
+      const note = document.createElement('span');
+      note.className = 'run-note';
+      note.textContent = '(accessible)';
+      li.append(note);
+    }
+    list.append(li);
+  }
+  if (runs.length > limit) {
+    const li = document.createElement('li');
+    li.className = 'run-note';
+    li.textContent = `+${runs.length - limit} more`;
+    list.append(li);
+  }
+}
+
+// ── match dialog ───────────────────────────────────────────────────
+
+/**
+ * Matches waiting to be shown. A poll can turn up several at once, so they
+ * queue rather than overwriting each other.
+ */
+const hitQueue = [];
+
+function showNextHit() {
+  const hit = hitQueue[0];
+  if (!hit) {
+    if (el.matchDialog.open) el.matchDialog.close();
+    return;
+  }
+  const { target, runs } = hit;
+  const total = runs.reduce((n, r) => n + r.seats.length, 0);
+
+  el.hitSub.textContent =
+    `${total} seat${total === 1 ? '' : 's'} in ${runs.length} block${runs.length === 1 ? '' : 's'}`;
+  el.hitMovie.textContent = target.movie || `Showtime ${target.showtimeId}`;
+  el.hitWhere.textContent = [target.theatre, formatWhen(target)].filter(Boolean).join(' · ');
+  el.hitBook.href = target.url;
+  paintRuns(el.hitRuns, runs);
+
+  el.hitQueue.textContent = hitQueue.length > 1 ? `1 of ${hitQueue.length}` : '';
+  el.hitDismiss.textContent = hitQueue.length > 1 ? 'Next' : 'Dismiss';
+
+  if (!el.matchDialog.open) el.matchDialog.showModal();
+}
+
+function queueHit(hit) {
+  // Replace any queued entry for the same showtime, so a re-alert updates in
+  // place instead of stacking duplicates.
+  const i = hitQueue.findIndex((h) => h.target.key === hit.target.key);
+  if (i >= 0) hitQueue[i] = hit;
+  else hitQueue.push(hit);
+  showNextHit();
+}
+
+el.hitDismiss.addEventListener('click', () => {
+  hitQueue.shift();
+  if (hitQueue.length) showNextHit();
+  else el.matchDialog.close();
+});
+
+// Esc (or the backdrop) closing the dialog drops the current match too.
+el.matchDialog.addEventListener('close', () => {
+  hitQueue.shift();
+  if (hitQueue.length) showNextHit();
+});
+
+// Booking is the point of the alert, so opening the link clears it.
+el.hitBook.addEventListener('click', () => el.matchDialog.close());
+
 function paintCard(card, t) {
   const result = t.result;
   const runs = result?.runs ?? [];
@@ -462,31 +623,7 @@ function paintCard(card, t) {
       `${total} seat${total === 1 ? '' : 's'} available in ${runs.length} block${runs.length === 1 ? '' : 's'}`;
     card.querySelector('.js-book').href = t.url;
 
-    const list = card.querySelector('.js-runs');
-    list.replaceChildren();
-    for (const run of runs.slice(0, 6)) {
-      const li = document.createElement('li');
-      const row = document.createElement('span');
-      row.className = 'run-row';
-      row.textContent = `Row ${run.row}`;
-      const seats = document.createElement('span');
-      seats.className = 'run-seats';
-      seats.textContent = run.seats.join(', ');
-      li.append(row, seats);
-      if (run.types?.some((x) => x !== 'Standard')) {
-        const note = document.createElement('span');
-        note.className = 'run-note';
-        note.textContent = '(accessible)';
-        li.append(note);
-      }
-      list.append(li);
-    }
-    if (runs.length > 6) {
-      const li = document.createElement('li');
-      li.className = 'run-note';
-      li.textContent = `+${runs.length - 6} more`;
-      list.append(li);
-    }
+    paintRuns(card.querySelector('.js-runs'), runs, 6);
   }
 
   const status = card.querySelector('.js-status');
@@ -671,13 +808,11 @@ function connect() {
   });
 
   source.addEventListener('alert', (e) => {
-    const { target, runs } = JSON.parse(e.data);
-    const best = runs[0];
-    const name = target.movie || `Showtime ${target.showtimeId}`;
-    const seats = `Row ${best.row}: ${best.seats.join(', ')}`;
-    toast('hit', `Seats available - ${name}`, seats);
-    addLog('hit', `${name} - ${seats}`);
-    browserNotify(name, seats, target.url);
+    const hit = JSON.parse(e.data);
+    const best = hit.runs[0];
+    const name = hit.target.movie || `Showtime ${hit.target.showtimeId}`;
+    addLog('hit', `${name} - Row ${best.row}: ${best.seats.join(', ')}`);
+    queueHit(hit);
   });
 
   source.addEventListener('expired', (e) => {
@@ -734,23 +869,6 @@ function updateBrand() {
   el.brandSub.textContent = active
     ? `Checking ${active} showtime${active === 1 ? '' : 's'} every ${every}s`
     : 'Nothing being watched';
-}
-
-/**
- * Browser notification, in addition to the macOS one the server fires.
- * Useful when the browser is focused on another tab.
- */
-function browserNotify(title, body, url) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try {
-    const n = new Notification(title, { body, tag: url });
-    n.onclick = () => {
-      window.open(url, '_blank', 'noopener');
-      n.close();
-    };
-  } catch {
-    /* notifications are a bonus, never a hard requirement */
-  }
 }
 
 // ── wiring ─────────────────────────────────────────────────────────
@@ -894,9 +1012,6 @@ el.saveRules.addEventListener('click', async () => {
     editingRules = false;
     el.rulesSaved.hidden = false;
     setTimeout(() => (el.rulesSaved.hidden = true), 1800);
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
   } catch (err) {
     toast('error', 'Could not save rules', err.message);
   }

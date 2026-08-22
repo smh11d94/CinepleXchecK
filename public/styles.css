@@ -275,15 +275,39 @@ h4 { font-size: 14.5px; line-height: 1.35; }
 }
 .rulebar-edit:hover { text-decoration: underline; }
 
-/* ═══ Location groups ═════════════════════════════════════════════ */
+/* ═══ Days ════════════════════════════════════════════════════════ */
+/* Days stack; theatres sit side by side within a day. Grouping this way is
+   what makes the columns line up - otherwise each theatre stacks all of its
+   days independently and nothing across the two columns corresponds. */
+.targets { display: flex; flex-direction: column; gap: 30px; }
+
+.day-head {
+  display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap;
+  padding-bottom: 11px; margin-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.day-title {
+  font-size: 21px; font-weight: 650; letter-spacing: -.02em; color: var(--text);
+}
+.day-rel {
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.day-rel:empty { display: none; }
+.day-meta { margin-left: auto; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.day-meta b { color: var(--good); font-weight: 600; }
+
 /* Theatres flow into columns when there is room; each group keeps its own
    height rather than stretching to match its neighbour. */
-.targets {
+.day-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
   align-items: start;
   gap: 16px;
 }
+
+/* ═══ Location groups ═════════════════════════════════════════════ */
 
 /* Everything at one theatre sits inside a single heavier border, so
    several locations stay visually separate in the list. */
@@ -567,6 +591,45 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 .log .lv-error { color: var(--bad); }
 .log .lv-hit { color: var(--good); font-weight: 600; }
 
+/* ═══ Match dialog ════════════════════════════════════════════════ */
+/* A real <dialog>: focus is trapped, Esc closes, and the backdrop is the
+   browser's own - no window.alert, no OS notification popup. */
+.hit-dialog {
+  width: min(460px, calc(100vw - 40px));
+  padding: 22px; border: 1px solid var(--good-border);
+  border-radius: var(--r-lg);
+  background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+.hit-dialog::backdrop { background: rgba(3, 7, 18, .62); backdrop-filter: blur(3px); }
+.hit-dialog[open] { animation: hitIn 240ms var(--ease); }
+@keyframes hitIn { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+
+.hit-top { display: flex; align-items: flex-start; gap: 12px; }
+.hit-badge {
+  width: 36px; height: 36px; flex: none; display: grid; place-items: center;
+  border-radius: 10px; background: var(--good-bg);
+  border: 1px solid var(--good-border); color: var(--good);
+}
+.hit-badge .ico { width: 19px; height: 19px; stroke-width: 2.6; }
+.hit-top h2 { font-size: 17px; color: var(--good); }
+.hit-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-dim); }
+.hit-queue {
+  margin-left: auto; flex: none; font: 11.5px var(--mono); color: var(--text-faint);
+}
+.hit-queue:empty { display: none; }
+
+.hit-movie { margin: 18px 0 0; font-size: 15.5px; line-height: 1.35; }
+.hit-where { margin: 4px 0 0; font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+.hit-dialog .runs {
+  margin: 15px 0 0; padding: 13px; border-radius: var(--r);
+  background: var(--good-bg); border: 1px solid var(--good-border);
+}
+
+.hit-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+.hit-actions .btn-book { min-height: 36px; padding: 8px 18px; }
+
 /* ═══ Toasts ══════════════════════════════════════════════════════ */
 .toasts {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;
@@ -597,7 +660,7 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 
 /* ═══ Narrow windows ══════════════════════════════════════════════ */
 @media (max-width: 1000px) {
-  .targets { grid-template-columns: 1fr; }
+  .day-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 800px) {

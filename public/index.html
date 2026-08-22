@@ -232,6 +232,27 @@
 
 </main>
 
+<dialog class="hit-dialog" id="matchDialog" aria-labelledby="hitHeading">
+  <div class="hit-top">
+    <span class="hit-badge"><svg class="ico" viewBox="0 0 24 24"><use href="#i-check"/></svg></span>
+    <div>
+      <h2 id="hitHeading">Seats available</h2>
+      <p class="hit-sub" id="hitSub"></p>
+    </div>
+    <span class="hit-queue" id="hitQueue"></span>
+  </div>
+
+  <h3 class="hit-movie" id="hitMovie"></h3>
+  <p class="hit-where" id="hitWhere"></p>
+
+  <ul class="runs" id="hitRuns"></ul>
+
+  <div class="hit-actions">
+    <button class="btn" id="hitDismiss" type="button">Dismiss</button>
+    <a class="btn btn-book" id="hitBook" target="_blank" rel="noopener">Book now</a>
+  </div>
+</dialog>
+
 <div class="toasts" id="toasts" aria-live="assertive"></div>
 
 <template id="knownTpl">
@@ -247,6 +268,17 @@
     </form>
     <p class="form-error known-error" hidden></p>
   </div>
+</template>
+
+<template id="dayTpl">
+  <section class="day">
+    <header class="day-head">
+      <h2 class="day-title"></h2>
+      <span class="day-rel"></span>
+      <span class="day-meta"></span>
+    </header>
+    <div class="day-grid"></div>
+  </section>
 </template>
 
 <template id="groupTpl">
