@@ -203,6 +203,19 @@ function describeRule(want) {
   return `${seats} in ${rows}`;
 }
 
+/**
+ * Earliest screening first. Showtimes with no start time sink to the bottom
+ * rather than jumping to the front, and ties fall back to the ID.
+ */
+function byStart(a, b) {
+  const ta = Date.parse(a.startTimeUtc ?? '');
+  const tb = Date.parse(b.startTimeUtc ?? '');
+  const va = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY;
+  const vb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY;
+  if (va !== vb) return va - vb;
+  return byId(a.showtimeId, b.showtimeId);
+}
+
 /** Numeric-aware compare, so "1409" sorts after "537" rather than before it. */
 function byId(a, b) {
   const na = Number(a);
@@ -217,9 +230,11 @@ function render() {
 
   // Sort before grouping. Showtimes are loaded in parallel, so arrival order is
   // whatever the network decided — without this the cards would shuffle on
-  // every restart. Location, then showtime, both numerically.
+  // every restart. Theatres keep a stable numeric order; within a theatre the
+  // order is chronological, because Cineplex's showtime IDs run against the
+  // clock (1405 on Aug 23 is 11PM, 7PM, 3PM, 11AM in ID order).
   const ordered = [...targets].sort(
-    (a, b) => byId(a.locationId, b.locationId) || byId(a.showtimeId, b.showtimeId)
+    (a, b) => byId(a.locationId, b.locationId) || byStart(a, b)
   );
 
   const byLocation = new Map();
