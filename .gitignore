@@ -1,0 +1,7 @@
+# Runtime + OS noise
+node_modules/
+*.tmp
+.DS_Store
+
+# Editor preferences are personal, not project config
+.vscode/

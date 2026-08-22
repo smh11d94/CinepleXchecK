@@ -1,0 +1,20 @@
+{
+  "name": "cineplex-check",
+  "version": "1.0.0",
+  "description": "Watches Cineplex showtimes and alerts when adjacent seats you want become available",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "cineplex-check": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "serve": "node index.js --serve",
+    "once": "node index.js --once",
+    "test-alert": "node index.js --test-alert"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}
