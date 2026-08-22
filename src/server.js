@@ -13,7 +13,7 @@ import { parseTicketUrl } from './api.js';
  * src/ while running — a server left up across an edit will happily serve the
  * new page to the browser while still running the old API.
  */
-export const API_VERSION = 5;
+export const API_VERSION = 6;
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 

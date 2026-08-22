@@ -11,7 +11,7 @@ const $ = (sel) => document.querySelector(sel);
  * page from an old API. That mismatch used to surface as a confusing validation
  * error; now it says plainly that the server needs restarting.
  */
-const EXPECTED_API_VERSION = 5;
+const EXPECTED_API_VERSION = 6;
 
 const el = {
   brandSub: $('#brandSub'),
@@ -513,28 +513,38 @@ function paintCard(card, t) {
     // Wheelchair spaces and their companion seats are separate seats in the
     // data (and on Cineplex's own map), so a row like E reads as inflated when
     // they are lumped in with normal seats. Split them out.
-    const standard = row.labels.length - row.special;
-    if (standard > 0 || row.special === 0) {
+    const standard = row.labels.length - (row.wheelchair + row.companion);
+    if (standard > 0 || (row.wheelchair + row.companion) === 0) {
       const count = document.createElement('i');
       count.textContent = ` ×${standard}`;
       tag.append(count);
     }
-    if (row.special > 0) {
+    // Wheelchair spaces and companion chairs are counted apart: a wheelchair
+    // position is one of each, so a single combined figure reads as twice as
+    // many wheelchair seats as the seat map actually shows.
+    const addAcc = (iconId, count, label) => {
+      if (!count) return;
       const acc = document.createElement('span');
       acc.className = 'rowtag-acc';
       acc.dataset.inactive = String(!allowSpecial);
-      acc.append(icon('i-access'));
+      acc.title = label;
+      acc.append(icon(iconId));
       const n = document.createElement('i');
-      n.textContent = row.special;
+      n.textContent = count;
       acc.append(n);
       tag.append(acc);
-    }
+    };
+    addAcc('i-access', row.wheelchair, 'wheelchair spaces');
+    addAcc('i-companion', row.companion, 'companion seats');
 
     const parts = [`Row ${row.row}: ${row.labels.join(', ')}`];
-    if (row.special > 0) {
+    if (row.wheelchair || row.companion) {
+      const bits = [];
+      if (row.wheelchair) bits.push(`${row.wheelchair} wheelchair space${row.wheelchair === 1 ? '' : 's'}`);
+      if (row.companion) bits.push(`${row.companion} companion seat${row.companion === 1 ? '' : 's'}`);
       parts.push(
-        `${row.special} of these are wheelchair/companion seats` +
-        (allowSpecial ? '' : ' and are excluded by your rule')
+        `Includes ${bits.join(' and ')}` +
+        (allowSpecial ? '' : ', excluded by your rule')
       );
     }
     tag.title = parts.join('\n');

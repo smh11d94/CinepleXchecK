@@ -139,14 +139,25 @@ export function matchSeats(seatIndex, availability, want) {
   };
 }
 
-/** "A: A1, A2, A3" style breakdown of every free seat, for the status line. */
+/**
+ * Per-row breakdown of free seats.
+ *
+ * Wheelchair spaces and companion seats are reported separately: a wheelchair
+ * position is one wheelchair space plus one ordinary-looking companion chair,
+ * so lumping them together reads as twice as many wheelchair seats as the seat
+ * map actually shows.
+ */
 export function summariseByRow(seats) {
   const out = [];
   for (const [, rowSeats] of groupByRow(seats)) {
+    const wheelchair = rowSeats.filter((s) => s.type === 'Wheelchair').length;
+    const companion = rowSeats.filter((s) => s.type === 'Companion').length;
     out.push({
       row: rowSeats[0].row,
       labels: rowSeats.map((s) => s.label),
-      special: rowSeats.filter((s) => SPECIAL_TYPES.has(s.type)).length,
+      wheelchair,
+      companion,
+      special: wheelchair + companion,
     });
   }
   return out.sort((a, b) => a.row.localeCompare(b.row));
