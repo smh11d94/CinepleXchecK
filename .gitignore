@@ -1,3 +1,7 @@
+# Personal watch list and live runtime state - the server rewrites this file
+# on every add, removal and settings change. See config.example.json.
+config.json
+
 # Runtime + OS noise
 node_modules/
 *.tmp

@@ -127,6 +127,7 @@ export class Watcher extends EventEmitter {
       movie: null,
       theatre: null,
       showDate: null,
+      startTime: null,
       rows: [],
       failures: 0,
       skipUntil: 0,
@@ -252,6 +253,7 @@ export class Watcher extends EventEmitter {
       movie: target.movie,
       theatre: target.theatre,
       showDate: target.showDate,
+      startTime: target.startTime,
       rows: target.rows,
       seatCount: target.seatIndex ? target.seatIndex.size : 0,
       want: target.want,
@@ -450,6 +452,9 @@ export async function warmup(target) {
   target.movie = meta?.movie ?? null;
   target.theatre = meta?.theatre ?? null;
   target.showDate = meta?.showDate ?? null;
+  // Local start time, e.g. "2026-08-22T15:00:00". showDate is date-only, so
+  // this nested field is the only place the actual screening time appears.
+  target.startTime = meta?.showtime?.showStartDateTime ?? null;
   target.rows = [...new Set([...target.seatIndex.values()].map((s) => s.row))].sort();
   return target;
 }

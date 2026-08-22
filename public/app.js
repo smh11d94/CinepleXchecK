@@ -11,7 +11,7 @@ const $ = (sel) => document.querySelector(sel);
  * page from an old API. That mismatch used to surface as a confusing validation
  * error; now it says plainly that the server needs restarting.
  */
-const EXPECTED_API_VERSION = 4;
+const EXPECTED_API_VERSION = 5;
 
 const el = {
   brandSub: $('#brandSub'),
@@ -173,6 +173,26 @@ function addLog(level, message, at) {
 }
 
 // ── rendering ──────────────────────────────────────────────────────
+
+/**
+ * When the film actually starts.
+ *
+ * `startTime` has no timezone suffix, so JS parses it as local — which is what
+ * we want, since it is already the theatre's local time. Falls back to the
+ * date alone if Cineplex ever omits it.
+ */
+function formatWhen(t) {
+  if (t.startTime) {
+    const d = new Date(t.startTime);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString([], {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    }
+  }
+  return t.showDate ? t.showDate.slice(0, 10) : `#${t.showtimeId}`;
+}
 
 function describeRule(want) {
   const n = want?.adjacentSeats ?? 1;
@@ -402,9 +422,13 @@ function paintCard(card, t) {
 
   card.querySelector('.target-movie').textContent = t.movie || `Showtime ${t.showtimeId}`;
 
-  // Theatre is shown once on the group header, so it is not repeated per card.
-  const bits = [t.showDate ? t.showDate.slice(0, 10) : null, `#${t.showtimeId}`];
-  card.querySelector('.target-meta').textContent = bits.filter(Boolean).join(' · ');
+  // Start time leads, then date and free count. Theatre lives on the group
+  // header and the matching rule is stated once above the list, so neither is
+  // repeated here.
+  card.querySelector('.js-when').textContent = formatWhen(t);
+  const free = result ? `${result.freeCount} free` : null;
+  card.querySelector('.js-rest').textContent =
+    [`#${t.showtimeId}`, free].filter(Boolean).join(' · ');
 
   card.querySelector('.js-open').href = t.url;
 
@@ -448,9 +472,6 @@ function paintCard(card, t) {
     }
   }
 
-  // Stats
-  card.querySelector('.js-free').textContent = result ? result.freeCount : '—';
-
   const status = card.querySelector('.js-status');
   status.className = 'stat js-status';
   if (t.error) {
@@ -470,8 +491,6 @@ function paintCard(card, t) {
   } else {
     status.textContent = '';
   }
-
-  card.querySelector('.js-checked').textContent = t.lastChecked ? clockOf(t.lastChecked) : '';
 
   // Per-row free-seat breakdown.
   //

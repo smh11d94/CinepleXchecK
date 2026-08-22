@@ -1,0 +1,16 @@
+{
+  "pollSeconds": 30,
+  "maxConcurrency": 6,
+  "want": {
+    "adjacentSeats": 2,
+    "rows": ["F", "G", "H", "I", "J"],
+    "allowSpecialSeats": false
+  },
+  "notify": {
+    "macos": true,
+    "sound": "Glass"
+  },
+  "targets": [
+    "https://www.cineplex.com/ticketing/preview?locationId=1405&showtimeId=537674&dbox=false"
+  ]
+}

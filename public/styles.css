@@ -308,7 +308,7 @@ h4 { font-size: 14.5px; line-height: 1.35; }
 /* ═══ Showtime card ═══════════════════════════════════════════════ */
 .target {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r); padding: 15px 16px;
+  border-radius: var(--r); padding: 13px 15px;
   box-shadow: var(--shadow-sm);
   transition: border-color var(--t), background var(--t), box-shadow var(--t);
   animation: cardIn 340ms var(--ease) both;
@@ -334,17 +334,21 @@ h4 { font-size: 14.5px; line-height: 1.35; }
 }
 
 .target-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.target-meta { margin: 3px 0 0; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.target-actions { display: flex; gap: 2px; flex: none; }
-
-.target-foot { margin-top: 13px; }
-.target-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-dim); }
-.stat b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
-.stat-time { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.target-meta {
+  margin: 4px 0 0; font-size: 12.5px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+}
+/* Start time leads the line — it is how you tell these showtimes apart. */
+.target-meta .js-when { color: var(--text); font-weight: 600; font-size: 13px; }
+/* Separators live in CSS so empty segments never leave a dangling dot. */
+.target-meta .js-rest:not(:empty)::before,
+.target-meta .js-status:not(:empty)::before { content: "\00b7"; margin-right: 7px; }
 .stat-bad { color: var(--bad); }
 .stat-warn { color: var(--warn); }
+.target-actions { display: flex; gap: 2px; flex: none; }
 
-.rowbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.rowbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; }
 .rowtag {
   padding: 2px 8px; border-radius: 6px;
   background: var(--surface-2); border: 1px solid var(--border);
